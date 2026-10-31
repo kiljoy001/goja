@@ -207,8 +207,51 @@ func (r *Runtime) linkModule(name string) error {
 			return err
 		}
 	}
+	// Validate that every imported name is exported by its dependency.
+	for _, imp := range rec.imports {
+		if imp.importName == "*" {
+			continue
+		}
+		dep := imp.from
+		if r.moduleLoader != nil {
+			if resolved, err := r.moduleLoader(imp.from, name); err == nil {
+				dep = resolved
+			}
+		}
+		d, ok := r.modules[dep]
+		if !ok {
+			continue
+		}
+		if !r.moduleExportsName(d, imp.importName, map[*ModuleRecord]bool{}) {
+			return fmt.Errorf("module %q does not export %q", dep, imp.importName)
+		}
+	}
 	rec.status = ModuleLinked
 	return nil
+}
+
+func (r *Runtime) moduleExportsName(rec *ModuleRecord, name string, seen map[*ModuleRecord]bool) bool {
+	if seen[rec] {
+		return false
+	}
+	seen[rec] = true
+	for _, e := range rec.exports {
+		if e.exportName == name {
+			return true
+		}
+	}
+	for _, star := range rec.stars {
+		dep := star
+		if r.moduleLoader != nil {
+			if resolved, err := r.moduleLoader(star, rec.name); err == nil {
+				dep = resolved
+			}
+		}
+		if d, ok := r.modules[dep]; ok && r.moduleExportsName(d, name, seen) {
+			return true
+		}
+	}
+	return false
 }
 
 // moduleDeclaredNames returns the names bound by an exported declaration.
@@ -335,6 +378,10 @@ func (r *Runtime) evaluateModule(name string) error {
 	}
 	exportsObj := r.newBaseObject(nil, classObject)
 	body := r.rewriteModuleSource(rec)
+	prevMeta := r.importMeta
+	meta := r.NewObject()
+	meta.Set("url", asciiString("file:///"+name))
+	r.importMeta = meta
 	wrapper := "(function(__mods, __exports) {\"use strict\";\n" + body + "\n})"
 	fnVal, err := r.RunString(wrapper)
 	if err != nil {
@@ -345,6 +392,7 @@ func (r *Runtime) evaluateModule(name string) error {
 		return fmt.Errorf("module %q: invalid module body", name)
 	}
 	_ = fn(FunctionCall{This: _undefined, Arguments: []Value{deps.val, exportsObj.val}})
+	r.importMeta = prevMeta
 	if keys, ok := exportsObj.val.self.(*baseObject); ok {
 		for k, v := range keys.values {
 			rec.values[k.String()] = v

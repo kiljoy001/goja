@@ -671,12 +671,33 @@ func (r *Runtime) getImportMetaObject() Value {
 }
 
 func (r *Runtime) dynamicImportValue(specifier Value) Value {
-	if r.dynamicImportHandler == nil {
-		p, _, reject := r.NewPromise()
-		_ = reject(r.NewTypeError("import() is not supported"))
+	spec := specifier.toString().String()
+	if r.dynamicImportHandler != nil {
+		return r.dynamicImportHandler(spec).val
+	}
+	name := spec
+	if r.moduleLoader != nil {
+		resolved, err := r.moduleLoader(spec, "")
+		if err != nil {
+			p, _, reject := r.NewPromise()
+			_ = reject(r.NewTypeError("Cannot resolve module %q", spec))
+			return p.val
+		}
+		name = resolved
+	}
+	if _, ok := r.modules[name]; ok {
+		p, resolve, reject := r.NewPromise()
+		ns, err := r.ModuleNamespace(name)
+		if err != nil {
+			_ = reject(r.NewTypeError(err.Error()))
+		} else {
+			_ = resolve(ns)
+		}
 		return p.val
 	}
-	return r.dynamicImportHandler(specifier.toString().String()).val
+	p, _, reject := r.NewPromise()
+	_ = reject(r.NewTypeError("Cannot resolve module %q", spec))
+	return p.val
 }
 
 func (r *Runtime) NewPromise() (promise *Promise, resolve, reject func(reason interface{}) error) {

@@ -75,3 +75,16 @@ func TestModuleEvaluation(t *testing.T) {
 		t.Fatalf("default = %v", got)
 	}
 }
+
+func TestDynamicImportResolution(t *testing.T) {
+	vm := New()
+	if err := vm.DefineModule("dyn.js", `export const value = 7;`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := vm.RunString(`var got = -1; import("dyn.js").then(function (ns) { got = ns.value; });`); err != nil {
+		t.Fatal(err)
+	}
+	if v := vm.Get("got"); v == nil || v.ToInteger() != 7 {
+		t.Fatalf("import() resolved to %v", v)
+	}
+}
