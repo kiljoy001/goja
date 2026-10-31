@@ -6,7 +6,7 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/kiljoy001/goja/unistring"
+	"github.com/dop251/goja/unistring"
 )
 
 const TESTLIB = `

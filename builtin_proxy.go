@@ -1,7 +1,7 @@
 package goja
 
 import (
-	"github.com/kiljoy001/goja/unistring"
+	"github.com/dop251/goja/unistring"
 )
 
 type nativeProxyHandler struct {

@@ -2,7 +2,7 @@ package goja
 
 import (
 	"fmt"
-	"github.com/kiljoy001/goja/unistring"
+	"github.com/dop251/goja/unistring"
 	"strings"
 	"unicode"
 	"unicode/utf16"

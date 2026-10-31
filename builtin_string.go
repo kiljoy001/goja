@@ -7,7 +7,7 @@ import (
 	"unicode/utf16"
 	"unicode/utf8"
 
-	"github.com/kiljoy001/goja/unistring"
+	"github.com/dop251/goja/unistring"
 
 	"golang.org/x/text/cases"
 	"golang.org/x/text/collate"

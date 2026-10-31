@@ -5,9 +5,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/kiljoy001/goja/ast"
-	"github.com/kiljoy001/goja/parser"
-	"github.com/kiljoy001/goja/unistring"
+	"github.com/dop251/goja/ast"
+	"github.com/dop251/goja/parser"
+	"github.com/dop251/goja/unistring"
 )
 
 // ModuleStatus is a module record's lifecycle state.

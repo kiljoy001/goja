@@ -5,7 +5,7 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/kiljoy001/goja/unistring"
+	"github.com/dop251/goja/unistring"
 )
 
 func isoYearMonthValid(year, month int64) bool {

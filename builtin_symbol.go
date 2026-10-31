@@ -1,6 +1,6 @@
 package goja
 
-import "github.com/kiljoy001/goja/unistring"
+import "github.com/dop251/goja/unistring"
 
 var (
 	SymAsyncIterator      = newSymbol(asciiString("Symbol.asyncIterator"))

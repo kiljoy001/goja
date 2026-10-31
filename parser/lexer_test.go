@@ -3,8 +3,8 @@ package parser
 import (
 	"testing"
 
-	"github.com/kiljoy001/goja/file"
-	"github.com/kiljoy001/goja/token"
+	"github.com/dop251/goja/file"
+	"github.com/dop251/goja/token"
 )
 
 func TestLexer(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/kiljoy001/goja/unistring"
+	"github.com/dop251/goja/unistring"
 )
 
 // temporalOptionsObject implements the GetOptionsObject conversion shared by

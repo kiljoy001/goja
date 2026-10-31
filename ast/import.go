@@ -1,6 +1,6 @@
 package ast
 
-import "github.com/kiljoy001/goja/file"
+import "github.com/dop251/goja/file"
 
 // ImportExpr is an import() call expression.
 type ImportExpr struct {

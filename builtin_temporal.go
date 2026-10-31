@@ -5,7 +5,7 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/kiljoy001/goja/unistring"
+	"github.com/dop251/goja/unistring"
 )
 
 // Temporal is a namespace object (like Math or JSON) rather than a

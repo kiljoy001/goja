@@ -5,7 +5,7 @@ import (
 	"math/bits"
 	"reflect"
 
-	"github.com/kiljoy001/goja/unistring"
+	"github.com/dop251/goja/unistring"
 )
 
 type objectGoSliceReflect struct {

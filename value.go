@@ -10,8 +10,8 @@ import (
 	"sync/atomic"
 	"unsafe"
 
-	"github.com/kiljoy001/goja/ftoa"
-	"github.com/kiljoy001/goja/unistring"
+	"github.com/dop251/goja/ftoa"
+	"github.com/dop251/goja/unistring"
 )
 
 var (

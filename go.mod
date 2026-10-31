@@ -1,4 +1,4 @@
-module github.com/kiljoy001/goja
+module github.com/dop251/goja
 
 go 1.26.0
 
@@ -14,4 +14,3 @@ require (
 
 require github.com/dop251/goja v0.0.0-20211022113120-dc8c55024d06 // indirect
 
-replace github.com/dop251/goja => ./
