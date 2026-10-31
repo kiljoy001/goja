@@ -77,6 +77,9 @@ func (r *Runtime) intlHasAnyOption(o *Object, names ...string) bool {
 // intlDateTimeOptionsFor implements ToDateTimeOptions.
 func (r *Runtime) intlDateTimeOptionsFor(options Value, required, defaults string) *Object {
 	o := r.intlCopyOptionsObject(options)
+	if o.self.getStr("dateStyle", nil) != nil || o.self.getStr("timeStyle", nil) != nil {
+		return o
+	}
 	dateKeys := []string{"weekday", "era", "year", "month", "day"}
 	timeKeys := []string{"dayPeriod", "hour", "minute", "second", "fractionalSecondDigits"}
 	switch required {
