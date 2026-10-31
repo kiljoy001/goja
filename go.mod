@@ -1,4 +1,4 @@
-module github.com/dop251/goja
+module github.com/kiljoy001/goja
 
 go 1.26.0
 
@@ -11,3 +11,5 @@ require (
 	github.com/google/pprof v0.0.0-20230207041349-798e818bf904
 	golang.org/x/text v0.43.0
 )
+
+replace github.com/dop251/goja => ./

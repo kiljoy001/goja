@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dop251/goja/unistring"
+	"github.com/kiljoy001/goja/unistring"
 )
 
 type intlLocaleObject struct {

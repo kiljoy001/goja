@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dop251/goja/unistring"
+	"github.com/kiljoy001/goja/unistring"
 )
 
 type temporalPlainMonthDayObject struct {

@@ -8,7 +8,7 @@ import (
 	"unicode/utf16"
 	"unicode/utf8"
 
-	"github.com/dop251/goja/unistring"
+	"github.com/kiljoy001/goja/unistring"
 )
 
 // Represents a string imported from Go. The idea is to delay the scanning for unicode characters and converting

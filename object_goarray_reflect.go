@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"strconv"
 
-	"github.com/dop251/goja/unistring"
+	"github.com/kiljoy001/goja/unistring"
 )
 
 type objectGoArrayReflect struct {

@@ -1,8 +1,8 @@
 package parser
 
 import (
-	"github.com/dop251/goja/ast"
-	"github.com/dop251/goja/token"
+	"github.com/kiljoy001/goja/ast"
+	"github.com/kiljoy001/goja/token"
 )
 
 // ParseModule parses src using the module goal.

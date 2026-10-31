@@ -3,7 +3,7 @@ package goja
 import (
 	"strconv"
 
-	"github.com/dop251/goja/unistring"
+	"github.com/kiljoy001/goja/unistring"
 )
 
 // intlNumberToLocaleString implements Number.prototype.toLocaleString and

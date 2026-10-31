@@ -1,6 +1,6 @@
 package ast
 
-import "github.com/dop251/goja/file"
+import "github.com/kiljoy001/goja/file"
 
 // ImportMeta is the import.meta expression.
 type ImportMeta struct {

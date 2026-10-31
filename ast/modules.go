@@ -1,6 +1,6 @@
 package ast
 
-import "github.com/dop251/goja/file"
+import "github.com/kiljoy001/goja/file"
 
 // ImportSpecifierKind describes the form of an import specifier.
 type ImportSpecifierKind int
