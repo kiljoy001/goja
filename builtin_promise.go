@@ -652,6 +652,54 @@ func (r *Runtime) wrapPromiseReaction(fObj *Object) func(interface{}) error {
 //	        })
 //	    }()
 //	}
+//
+// DynamicImportHandler resolves an import() specifier.
+type DynamicImportHandler func(specifier string) *Promise
+
+// SetDynamicImportHandler registers the host hook used by import() expressions.
+func (r *Runtime) SetDynamicImportHandler(h DynamicImportHandler) {
+	r.dynamicImportHandler = h
+}
+
+func (r *Runtime) getImportMetaObject() Value {
+	if r.importMeta == nil {
+		o := r.NewObject()
+		o.Set("url", asciiString(""))
+		r.importMeta = o
+	}
+	return r.importMeta
+}
+
+func (r *Runtime) dynamicImportValue(specifier Value) Value {
+	spec := specifier.toString().String()
+	if r.dynamicImportHandler != nil {
+		return r.dynamicImportHandler(spec).val
+	}
+	name := spec
+	if r.moduleLoader != nil {
+		resolved, err := r.moduleLoader(spec, "")
+		if err != nil {
+			p, _, reject := r.NewPromise()
+			_ = reject(r.NewTypeError("Cannot resolve module %q", spec))
+			return p.val
+		}
+		name = resolved
+	}
+	if _, ok := r.modules[name]; ok {
+		p, resolve, reject := r.NewPromise()
+		ns, err := r.ModuleNamespace(name)
+		if err != nil {
+			_ = reject(r.NewTypeError(err.Error()))
+		} else {
+			_ = resolve(ns)
+		}
+		return p.val
+	}
+	p, _, reject := r.NewPromise()
+	_ = reject(r.NewTypeError("Cannot resolve module %q", spec))
+	return p.val
+}
+
 func (r *Runtime) NewPromise() (promise *Promise, resolve, reject func(reason interface{}) error) {
 	p := r.newPromise(r.getPromisePrototype())
 	resolveF, rejectF := p.createResolvingFunctions()
