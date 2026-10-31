@@ -88,3 +88,27 @@ func TestDynamicImportResolution(t *testing.T) {
 		t.Fatalf("import() resolved to %v", v)
 	}
 }
+
+func TestAmbiguousStarExports(t *testing.T) {
+	vm := New()
+	for name, src := range map[string]string{
+		"s1.js":   `export const dup = 1; export const one = 1;`,
+		"s2.js":   `export const dup = 2; export const two = 2;`,
+		"star.js": `export * from "s1.js"; export * from "s2.js";`,
+		"bad.js":  `import {dup} from "star.js"; export const x = dup;`,
+		"ok.js":   `import {one, two} from "star.js"; export const x = one + two;`,
+	} {
+		if err := vm.DefineModule(name, src); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := vm.LinkModule("star.js"); err != nil {
+		t.Fatal(err)
+	}
+	if err := vm.LinkModule("ok.js"); err != nil {
+		t.Fatalf("non-ambiguous star import should link: %v", err)
+	}
+	if err := vm.LinkModule("bad.js"); err == nil {
+		t.Fatal("expected an ambiguous export link error")
+	}
+}

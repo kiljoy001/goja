@@ -38,16 +38,18 @@ type moduleExportEntry struct {
 
 // ModuleRecord holds the compiled shape of a module.
 type ModuleRecord struct {
-	src       string
-	values    map[string]Value
-	name      string
-	program   *ast.Program
-	status    ModuleStatus
-	imports   []moduleImportEntry
-	exports   []moduleExportEntry
-	stars     []string
-	starAs    map[string]string // namespace name -> source
-	namespace *Object
+	starExports map[string][]string
+	ambiguous   map[string]bool
+	src         string
+	values      map[string]Value
+	name        string
+	program     *ast.Program
+	status      ModuleStatus
+	imports     []moduleImportEntry
+	exports     []moduleExportEntry
+	stars       []string
+	starAs      map[string]string // namespace name -> source
+	namespace   *Object
 }
 
 // SetModuleLoader installs the host hook that resolves module specifiers.
@@ -61,7 +63,7 @@ func (r *Runtime) DefineModule(name, src string) error {
 	if err != nil {
 		return err
 	}
-	rec := &ModuleRecord{name: name, src: src, program: prog, status: ModuleUnlinked, starAs: map[string]string{}, values: map[string]Value{}}
+	rec := &ModuleRecord{name: name, src: src, program: prog, status: ModuleUnlinked, starAs: map[string]string{}, values: map[string]Value{}, starExports: map[string][]string{}, ambiguous: map[string]bool{}}
 	seen := map[string]bool{}
 	for _, stmt := range prog.Body {
 		switch s := stmt.(type) {
@@ -207,6 +209,33 @@ func (r *Runtime) linkModule(name string) error {
 			return err
 		}
 	}
+	// Collect statically known star exports and mark ambiguous names.
+	for _, star := range rec.stars {
+		dep := star
+		if r.moduleLoader != nil {
+			if resolved, err := r.moduleLoader(star, name); err == nil {
+				dep = resolved
+			}
+		}
+		d, ok := r.modules[dep]
+		if !ok {
+			continue
+		}
+		for _, e := range d.exports {
+			if e.exportName == "" || e.exportName == "default" {
+				continue
+			}
+			rec.starExports[e.exportName] = appendUnique(rec.starExports[e.exportName], dep)
+		}
+		for n := range d.starExports {
+			rec.starExports[n] = appendUnique(rec.starExports[n], dep)
+		}
+	}
+	for n, srcs := range rec.starExports {
+		if len(srcs) > 1 && !moduleHasLocalExport(rec, n) {
+			rec.ambiguous[n] = true
+		}
+	}
 	// Validate that every imported name is exported by its dependency.
 	for _, imp := range rec.imports {
 		if imp.importName == "*" {
@@ -230,6 +259,24 @@ func (r *Runtime) linkModule(name string) error {
 	return nil
 }
 
+func appendUnique(list []string, v string) []string {
+	for _, x := range list {
+		if x == v {
+			return list
+		}
+	}
+	return append(list, v)
+}
+
+func moduleHasLocalExport(rec *ModuleRecord, name string) bool {
+	for _, e := range rec.exports {
+		if e.exportName == name && e.from == "" {
+			return true
+		}
+	}
+	return false
+}
+
 func (r *Runtime) moduleExportsName(rec *ModuleRecord, name string, seen map[*ModuleRecord]bool) bool {
 	if seen[rec] {
 		return false
@@ -239,6 +286,12 @@ func (r *Runtime) moduleExportsName(rec *ModuleRecord, name string, seen map[*Mo
 		if e.exportName == name {
 			return true
 		}
+	}
+	if rec.ambiguous[name] {
+		return false
+	}
+	if _, ok := rec.starExports[name]; ok {
+		return true
 	}
 	for _, star := range rec.stars {
 		dep := star
@@ -409,6 +462,9 @@ func (r *Runtime) evaluateModule(name string) error {
 		if d, ok := r.modules[dep]; ok {
 			for k, v := range d.values {
 				if k == "default" {
+					continue
+				}
+				if rec.ambiguous[k] {
 					continue
 				}
 				if _, exists := rec.values[k]; !exists {
