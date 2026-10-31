@@ -112,3 +112,20 @@ func TestAmbiguousStarExports(t *testing.T) {
 		t.Fatal("expected an ambiguous export link error")
 	}
 }
+
+func TestDefineModuleIdempotent(t *testing.T) {
+	vm := New()
+	src := `export const a = 1;`
+	if err := vm.DefineModule("m.js", src); err != nil {
+		t.Fatal(err)
+	}
+	if err := vm.LinkModule("m.js"); err != nil {
+		t.Fatal(err)
+	}
+	if err := vm.DefineModule("m.js", src); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := vm.ModuleNamespace("m.js"); err != nil {
+		t.Fatal(err)
+	}
+}

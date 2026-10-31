@@ -59,6 +59,9 @@ func (r *Runtime) SetModuleLoader(l ModuleLoader) {
 
 // DefineModule parses src as a module and registers it under name.
 func (r *Runtime) DefineModule(name, src string) error {
+	if rec, ok := r.modules[name]; ok && rec.src == src {
+		return nil
+	}
 	prog, err := parser.ParseModule(name, src)
 	if err != nil {
 		return err
