@@ -3,6 +3,7 @@ package goja
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/dop251/goja/ast"
 	"github.com/dop251/goja/parser"
@@ -37,6 +38,8 @@ type moduleExportEntry struct {
 
 // ModuleRecord holds the compiled shape of a module.
 type ModuleRecord struct {
+	src       string
+	values    map[string]Value
 	name      string
 	program   *ast.Program
 	status    ModuleStatus
@@ -58,7 +61,7 @@ func (r *Runtime) DefineModule(name, src string) error {
 	if err != nil {
 		return err
 	}
-	rec := &ModuleRecord{name: name, program: prog, status: ModuleUnlinked, starAs: map[string]string{}}
+	rec := &ModuleRecord{name: name, src: src, program: prog, status: ModuleUnlinked, starAs: map[string]string{}, values: map[string]Value{}}
 	seen := map[string]bool{}
 	for _, stmt := range prog.Body {
 		switch s := stmt.(type) {
@@ -237,14 +240,17 @@ func moduleBindingNames(list []*ast.Binding) []string {
 	return res
 }
 
-// ModuleNamespace returns the module namespace exotic object for a module.
+// ModuleNamespace evaluates a module (if needed) and returns its namespace.
 func (r *Runtime) ModuleNamespace(name string) (Value, error) {
-	rec, ok := r.modules[name]
-	if !ok {
-		return nil, fmt.Errorf("module %q is not defined", name)
+	if err := r.evaluateModule(name); err != nil {
+		return nil, err
 	}
+	return r.moduleNamespaceValue(r.modules[name]), nil
+}
+
+func (r *Runtime) moduleNamespaceValue(rec *ModuleRecord) *Object {
 	if rec.namespace != nil {
-		return rec.namespace, nil
+		return rec.namespace
 	}
 	ns := r.newBaseObject(nil, classObject)
 	seen := map[string]bool{}
@@ -259,8 +265,12 @@ func (r *Runtime) ModuleNamespace(name string) (Value, error) {
 	sort.Strings(names)
 	for _, n := range names {
 		key := unistring.NewFromString(n)
+		v := rec.values[n]
+		if v == nil {
+			v = _undefined
+		}
 		ns.defineOwnPropertyStr(key, PropertyDescriptor{
-			Value:        _undefined,
+			Value:        v,
 			Writable:     FLAG_TRUE,
 			Enumerable:   FLAG_TRUE,
 			Configurable: FLAG_FALSE,
@@ -273,5 +283,188 @@ func (r *Runtime) ModuleNamespace(name string) (Value, error) {
 		Configurable: FLAG_FALSE,
 	}, false)
 	rec.namespace = ns.val
-	return ns.val, nil
+	return ns.val
+}
+
+// evaluateModule links and evaluates a module and its dependencies.
+func (r *Runtime) evaluateModule(name string) error {
+	rec, ok := r.modules[name]
+	if !ok {
+		return fmt.Errorf("module %q is not defined", name)
+	}
+	switch rec.status {
+	case ModuleEvaluated, ModuleEvaluating:
+		return nil
+	}
+	if err := r.linkModule(name); err != nil {
+		return err
+	}
+	rec.status = ModuleEvaluating
+	deps := r.newBaseObject(nil, classObject)
+	evalDep := func(spec string) error {
+		dep := spec
+		if r.moduleLoader != nil {
+			resolved, err := r.moduleLoader(spec, name)
+			if err != nil {
+				return err
+			}
+			dep = resolved
+		}
+		if err := r.evaluateModule(dep); err != nil {
+			return err
+		}
+		deps.setOwnStr(unistring.NewFromString(spec), r.moduleNamespaceValue(r.modules[dep]), false)
+		return nil
+	}
+	for _, imp := range rec.imports {
+		if err := evalDep(imp.from); err != nil {
+			return err
+		}
+	}
+	for _, exp := range rec.exports {
+		if exp.from != "" {
+			if err := evalDep(exp.from); err != nil {
+				return err
+			}
+		}
+	}
+	for _, star := range rec.stars {
+		if err := evalDep(star); err != nil {
+			return err
+		}
+	}
+	exportsObj := r.newBaseObject(nil, classObject)
+	body := r.rewriteModuleSource(rec)
+	wrapper := "(function(__mods, __exports) {\"use strict\";\n" + body + "\n})"
+	fnVal, err := r.RunString(wrapper)
+	if err != nil {
+		return fmt.Errorf("module %q: %w", name, err)
+	}
+	fn, ok := r.toObject(fnVal).self.assertCallable()
+	if !ok {
+		return fmt.Errorf("module %q: invalid module body", name)
+	}
+	_ = fn(FunctionCall{This: _undefined, Arguments: []Value{deps.val, exportsObj.val}})
+	if keys, ok := exportsObj.val.self.(*baseObject); ok {
+		for k, v := range keys.values {
+			rec.values[k.String()] = v
+		}
+	}
+	// Star exports.
+	for _, star := range rec.stars {
+		dep := star
+		if r.moduleLoader != nil {
+			if resolved, err := r.moduleLoader(star, name); err == nil {
+				dep = resolved
+			}
+		}
+		if d, ok := r.modules[dep]; ok {
+			for k, v := range d.values {
+				if k == "default" {
+					continue
+				}
+				if _, exists := rec.values[k]; !exists {
+					rec.values[k] = v
+					rec.exports = append(rec.exports, moduleExportEntry{exportName: k, from: star})
+				}
+			}
+		}
+	}
+	rec.status = ModuleEvaluated
+	return nil
+}
+
+// rewriteModuleSource lowers import/export declarations to plain script code.
+func (r *Runtime) rewriteModuleSource(rec *ModuleRecord) string {
+	src := rec.src
+	var sb strings.Builder
+	for _, stmt := range rec.program.Body {
+		idx0 := int(stmt.Idx0()) - 1
+		idx1 := int(stmt.Idx1()) - 1
+		if idx0 < 0 || idx1 > len(src) || idx0 >= idx1 {
+			continue
+		}
+		text := src[idx0:idx1]
+		switch s := stmt.(type) {
+		case *ast.ImportDeclaration:
+			if s.Source == nil {
+				continue
+			}
+			from := s.Source.Value.String()
+			sb.WriteString("__mods[" + strconvQuote(from) + "];")
+			for _, spec := range s.Specifiers {
+				local := spec.Local.Name.String()
+				switch spec.Kind {
+				case ast.ImportNamespace:
+					sb.WriteString("const " + local + " = __mods[" + strconvQuote(from) + "];")
+				case ast.ImportDefault:
+					sb.WriteString("const " + local + " = __mods[" + strconvQuote(from) + "].default;")
+				default:
+					imported := local
+					if spec.Imported != nil {
+						imported = spec.Imported.Name.String()
+					}
+					sb.WriteString("const " + local + " = __mods[" + strconvQuote(from) + "][" + strconvQuote(imported) + "];")
+				}
+			}
+		case *ast.ExportDeclaration:
+			if s.IsDefault {
+				rest := text
+				if i := strings.Index(rest, "default"); i >= 0 {
+					rest = rest[i+len("default"):]
+				}
+				rest = strings.TrimSpace(rest)
+				rest = strings.TrimSuffix(rest, ";")
+				sb.WriteString("__exports.default = (" + strings.TrimSpace(rest) + ");\n")
+				continue
+			}
+			if s.Declaration != nil {
+				sb.WriteString(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(text), "export")) + ";\n")
+				for _, n := range moduleDeclaredNames(s.Declaration) {
+					sb.WriteString("__exports[" + strconvQuote(n) + "] = " + n + ";\n")
+				}
+				continue
+			}
+			from := ""
+			if s.Source != nil {
+				from = s.Source.Value.String()
+			}
+			for _, spec := range s.Specifiers {
+				local := ""
+				if spec.Local != nil {
+					local = spec.Local.Name.String()
+				}
+				exported := local
+				if spec.Exported != nil {
+					exported = spec.Exported.Name.String()
+				}
+				if from != "" {
+					sb.WriteString("__exports[" + strconvQuote(exported) + "] = __mods[" + strconvQuote(from) + "][" + strconvQuote(local) + "];")
+				} else {
+					sb.WriteString("__exports[" + strconvQuote(exported) + "] = " + local + ";\n")
+				}
+			}
+		default:
+			sb.WriteString(text)
+		}
+		sb.WriteString("\n")
+	}
+	return sb.String()
+}
+
+func strconvQuote(s string) string {
+	var sb strings.Builder
+	sb.WriteByte('"')
+	for _, r := range s {
+		switch r {
+		case '"':
+			sb.WriteString("\\\"")
+		case '\\':
+			sb.WriteString("\\\\")
+		default:
+			sb.WriteRune(r)
+		}
+	}
+	sb.WriteByte('"')
+	return sb.String()
 }

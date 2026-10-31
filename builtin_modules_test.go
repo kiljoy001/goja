@@ -54,3 +54,24 @@ func TestModuleNamespace(t *testing.T) {
 		t.Fatal("missing export property")
 	}
 }
+
+func TestModuleEvaluation(t *testing.T) {
+	vm := New()
+	if err := vm.DefineModule("dep.js", `export const two = 2; export default 40;`); err != nil {
+		t.Fatal(err)
+	}
+	if err := vm.DefineModule("main.js", `import def, {two} from "dep.js"; export const sum = def + two; export default sum * 2;`); err != nil {
+		t.Fatal(err)
+	}
+	nsv, err := vm.ModuleNamespace("main.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ns := nsv.(*Object)
+	if got := ns.Get("sum"); got == nil || got.ToInteger() != 42 {
+		t.Fatalf("sum = %v", got)
+	}
+	if got := ns.Get("default"); got == nil || got.ToInteger() != 84 {
+		t.Fatalf("default = %v", got)
+	}
+}
